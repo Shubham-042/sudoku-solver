@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#6c5ce7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Sudoku Vision - snap, solve, done</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<style>
+  :root {
+    --bg: #f5f6ff; --card: rgba(255,255,255,.82); --text: #14172b; --muted: #6b7090; --line: #e1e4f4;
+    --accent: #6c5ce7; --accent2: #00b8d9; --ok: #12b76a; --warn: #f79009; --err: #f04438;
+    --cell: #ffffff; --given: #14172b; --solved: #12a05f; --shadow: 0 12px 40px rgba(70,70,140,.14);
+    --glow1: rgba(108,92,231,.18); --glow2: rgba(0,184,217,.16);
+  }
+  [data-theme="dark"] {
+    --bg: #0c0f1f; --card: rgba(24,29,58,.78); --text: #eef0ff; --muted: #9aa0c8; --line: #2a3060;
+    --cell: #141937; --given: #eef0ff; --solved: #38d996; --shadow: 0 12px 40px rgba(0,0,0,.45);
+    --glow1: rgba(108,92,231,.28); --glow2: rgba(0,184,217,.18);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--text); font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: radial-gradient(900px 520px at 8% -8%, var(--glow1), transparent 60%),
+                radial-gradient(800px 480px at 100% 0%, var(--glow2), transparent 55%), var(--bg);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 18px 40px; }
+  button { font: inherit; cursor: pointer; }
+  [hidden] { display: none !important; }
+
+  /* ---------- top bar ---------- */
+  .top { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -.3px; font-size: 19px; }
+  .brand img { width: 34px; height: 34px; border-radius: 9px; box-shadow: 0 4px 14px rgba(108,92,231,.4); }
+  .top-actions { display: flex; gap: 8px; }
+  .icon-btn { border: 1px solid var(--line); background: var(--card); color: var(--text); width: 40px; height: 40px;
+    border-radius: 12px; font-size: 18px; backdrop-filter: blur(8px); }
+  .pill-btn { border: 1px solid var(--line); background: var(--card); color: var(--text); height: 40px; padding: 0 14px; border-radius: 12px; font-weight: 600; }
+
+  /* ---------- hero / upload ---------- */
+  #hero { text-align: center; padding: 28px 0 10px; }
+  h1 { font-size: clamp(34px, 6vw, 60px); line-height: 1.04; margin: 0 0 14px; letter-spacing: -1.5px; font-weight: 850; }
+  h1 span { background: linear-gradient(100deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lead { color: var(--muted); font-size: clamp(15px, 2.2vw, 18px); max-width: 620px; margin: 0 auto 26px; line-height: 1.5; }
+  .drop { max-width: 640px; margin: 0 auto; padding: 34px 22px; border-radius: 26px; text-align: center;
+    border: 2px dashed color-mix(in srgb, var(--accent) 45%, transparent); background: var(--card); backdrop-filter: blur(10px);
+    box-shadow: var(--shadow); transition: transform .2s, border-color .2s, background .2s; }
+  .drop.over { transform: scale(1.025); border-color: var(--accent2); background: color-mix(in srgb, var(--accent2) 12%, var(--card)); }
+  .drop svg { width: 78px; height: 78px; margin-bottom: 8px; }
+  .drop h3 { margin: 4px 0 4px; font-size: 20px; }
+  .drop p { margin: 0 0 18px; color: var(--muted); font-size: 14px; }
+  .btn-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .btn { border: 0; border-radius: 14px; padding: 13px 22px; font-weight: 700; font-size: 15px; transition: transform .12s, box-shadow .2s, opacity .2s; }
+  .btn:active { transform: scale(.97); }
+  .btn.primary { color: #fff; background: linear-gradient(110deg, var(--accent), #8a6df0 55%, var(--accent2)); box-shadow: 0 8px 22px rgba(108,92,231,.38); }
+  .btn.ghost { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
+  .btn.sm { padding: 9px 14px; font-size: 13px; border-radius: 11px; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .features { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 22px; }
+  .features span { font-size: 13px; padding: 7px 13px; border-radius: 99px; border: 1px solid var(--line); background: var(--card); color: var(--muted); }
+
+  /* ---------- workspace ---------- */
+  #work { display: none; padding-top: 6px; }
+  #work.show { display: block; animation: rise .45s ease both; }
+  .cols { display: grid; grid-template-columns: 1.1fr .9fr; gap: 20px; align-items: start; }
+  .card { background: var(--card); backdrop-filter: blur(12px); border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--shadow); padding: 16px; }
+
+  .compare { position: relative; border-radius: 14px; overflow: hidden; background: #0002; user-select: none; touch-action: pan-y; --pos: 100%; }
+  .compare img { display: block; width: 100%; height: auto; }
+  .compare #imgAfter { position: absolute; inset: 0; height: 100%; object-fit: fill; opacity: 0; }
+  .compare.solved #imgAfter { opacity: 1; }
+  .compare #imgBefore { position: relative; clip-path: inset(0 calc(100% - var(--pos)) 0 0); }
+  .tag { position: absolute; top: 10px; padding: 4px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; color: #fff; background: rgba(10,12,30,.62); backdrop-filter: blur(4px); opacity: 0; transition: opacity .3s; pointer-events: none; }
+  .tag.l { left: 10px; } .tag.r { right: 10px; }
+  .compare.solved .tag { opacity: 1; }
+  .handle { position: absolute; top: 0; bottom: 0; left: var(--pos); width: 3px; margin-left: -1.5px; background: #fff; box-shadow: 0 0 12px rgba(0,0,0,.45); display: none; cursor: ew-resize; }
+  .compare.solved .handle { display: block; }
+  .handle i { position: absolute; top: 50%; left: 50%; width: 38px; height: 38px; margin: -19px; border-radius: 50%; background: #fff; box-shadow: 0 4px 14px rgba(0,0,0,.4); display: grid; place-items: center; font-style: normal; color: var(--accent); font-size: 14px; font-weight: 800; }
+  .scan { position: absolute; inset: 0; display: none; pointer-events: none; background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--accent2) 35%, transparent) 50%, transparent) 0 -40% / 100% 40% no-repeat; }
+  .compare.loading .scan { display: block; animation: sweep 1.3s linear infinite; }
+  .compare.loading #imgBefore { filter: saturate(.85) brightness(.92); }
+  .under { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 12px; flex-wrap: wrap; }
+  #status { font-size: 14px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .dot.busy { background: var(--accent2); animation: pulse 1s infinite; }
+  .dot.ok { background: var(--ok); } .dot.err { background: var(--err); }
+
+  /* ---------- side panel ---------- */
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .chip { padding: 6px 12px; border-radius: 99px; background: color-mix(in srgb, var(--accent) 10%, transparent); font-size: 13px; font-weight: 600; }
+  .chip b { color: var(--accent); }
+  #banner { display: none; border-radius: 14px; padding: 11px 14px; font-size: 14px; line-height: 1.45; margin-bottom: 12px; font-weight: 550; }
+  #banner.show { display: block; animation: rise .3s ease both; }
+  #banner.ok { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+  #banner.err { background: color-mix(in srgb, var(--err) 13%, transparent); color: var(--err); }
+  #banner.info { background: color-mix(in srgb, var(--accent) 11%, transparent); color: var(--accent); }
+  .tabs { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: color-mix(in srgb, var(--text) 7%, transparent); margin-bottom: 14px; }
+  .tabs button { flex: 1; border: 0; padding: 9px 8px; border-radius: 11px; background: transparent; color: var(--muted); font-weight: 700; font-size: 14px; }
+  .tabs button.on { background: var(--cell); color: var(--text); box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+
+  .board { display: grid; grid-template-columns: repeat(9, 1fr); width: 100%; max-width: 440px; margin: 0 auto; aspect-ratio: 1; border: 2.5px solid var(--text); border-radius: 12px; overflow: hidden; background: var(--cell); }
+  .cell { position: relative; display: grid; place-items: center; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); font-weight: 700; font-size: clamp(15px, 4.4vw, 24px); color: var(--given); min-width: 0; }
+  .cell.br { border-right: 2.5px solid var(--text); } .cell.bb { border-bottom: 2.5px solid var(--text); }
+  .cell:nth-child(9n) { border-right: 0; } .cell:nth-child(n+73) { border-bottom: 0; }
+  .cell.fill span { color: var(--solved); animation: pop .5s cubic-bezier(.2,1.3,.4,1) both; animation-delay: var(--d, 0ms); }
+  .cell input { width: 100%; height: 100%; border: 0; background: transparent; text-align: center; font: inherit; color: inherit; outline: none; padding: 0; border-radius: 0; }
+  .cell input:focus { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+  .cell.low { background: color-mix(in srgb, var(--warn) 24%, transparent); }
+  .cell.vlow { background: color-mix(in srgb, var(--err) 26%, transparent); }
+  .cell.edited { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+  .hint { margin: 0 0 12px; color: var(--muted); font-size: 13.5px; line-height: 1.45; }
+  .legend { display: flex; gap: 12px; justify-content: center; margin: 12px 0 4px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .panel-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  .panel-actions .btn { flex: 1; min-width: 120px; }
+  .center { text-align: center; margin-top: 12px; }
+
+  footer { text-align: center; color: var(--muted); font-size: 12.5px; margin-top: 34px; line-height: 1.6; }
+
+  #dropall { position: fixed; inset: 0; display: none; place-items: center; z-index: 50; background: rgba(108,92,231,.35); backdrop-filter: blur(6px); color: #fff; font-size: 26px; font-weight: 800; }
+  #dropall.show { display: grid; }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  @keyframes pop { 0% { opacity: 0; transform: scale(.2); } 60% { transform: scale(1.3); } 100% { opacity: 1; transform: scale(1); } }
+  @keyframes sweep { from { background-position: 0 -40%; } to { background-position: 0 140%; } }
+  @keyframes pulse { 50% { opacity: .35; transform: scale(.8); } }
+  @media (max-width: 860px) { .cols { grid-template-columns: 1fr; } .wrap { padding: 0 14px 40px; } }
+  @media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; animation-delay: 0ms !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand"><img src="/icon-192.png" alt=""> Sudoku Vision</div>
+    <div class="top-actions">
+      <button class="pill-btn" id="installBtn" hidden>Install app</button>
+      <button class="icon-btn" id="themeBtn" title="Switch theme" aria-label="Switch theme">&#9790;</button>
+    </div>
+  </div>
+
+  <!-- ===== landing / upload ===== -->
+  <section id="hero">
+    <h1>Snap. <span>Solve.</span> Done.</h1>
+    <p class="lead">Drop a photo or screenshot of any Sudoku, printed or handwritten, and get the solved picture back in a second.</p>
+    <div class="drop" id="drop">
+      <svg viewBox="0 0 80 80" fill="none" stroke="currentColor" aria-hidden="true">
+        <rect x="8" y="8" width="64" height="64" rx="10" stroke="#6c5ce7" stroke-width="3"/>
+        <path d="M29 8v64M51 8v64M8 29h64M8 51h64" stroke="#6c5ce7" stroke-width="2" opacity=".55"/>
+        <path d="M40 58V34m0 0-9 9m9-9 9 9" stroke="#00b8d9" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <h3>Drop a Sudoku image here</h3>
+      <p>or paste it with Ctrl+V &middot; PNG, JPG</p>
+      <div class="btn-row">
+        <button class="btn primary" id="camBtn" hidden>&#128247; Take photo</button>
+        <button class="btn primary" id="pickBtn">Choose image</button>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" hidden>
+      <input type="file" id="camInput" accept="image/*" capture="environment" hidden>
+    </div>
+    <div class="features"><span>&#9999;&#65039; Printed &amp; handwritten</span><span>&#128241; Photos &amp; screenshots</span><span>&#128260; Any angle</span><span>&#9998; Edit &amp; re-solve</span></div>
+  </section>
+
+  <!-- ===== result workspace ===== -->
+  <section id="work">
+    <div class="cols">
+      <div class="card">
+        <div class="compare loading" id="cmp">
+          <img id="imgAfter" alt="Solved Sudoku">
+          <img id="imgBefore" alt="Your Sudoku">
+          <span class="tag l">Original</span><span class="tag r">Solved</span>
+          <div class="handle" id="handle"><i>&#8596;</i></div>
+          <div class="scan"></div>
+        </div>
+        <div class="under">
+          <div id="status"><span class="dot busy" id="dot"></span><span id="statusText">Reading the grid...</span></div>
+          <button class="btn ghost sm" id="newBtn">&#10010; New puzzle</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div id="banner"></div>
+        <div class="chips" id="chips"></div>
+        <div id="tabsArea">
+        <div class="tabs">
+          <button class="on" data-tab="sol">Solution</button>
+          <button data-tab="chk">Check digits</button>
+        </div>
+
+        <div id="tab-sol">
+          <div class="board" id="solBoard"></div>
+          <div class="center"><button class="btn ghost sm" id="replayBtn">&#8635; Replay</button></div>
+        </div>
+
+        <div id="tab-chk" hidden>
+          <p class="hint">These are the digits read from your picture. Tap a cell to fix a wrong one, then solve again.</p>
+          <div class="board" id="editBoard"></div>
+          <div class="legend"><span><i style="background:color-mix(in srgb,var(--warn) 45%,transparent)"></i>unsure</span><span><i style="background:color-mix(in srgb,var(--err) 45%,transparent)"></i>very unsure</span><span><i style="background:color-mix(in srgb,var(--accent) 40%,transparent)"></i>edited</span></div>
+          <div class="center"><button class="btn primary" id="resolveBtn">Solve again with my corrections</button></div>
+        </div>
+
+        </div>
+        <div id="tips" hidden>
+          <p class="hint"><b>Tips for a good scan</b></p>
+          <ul class="hint" style="padding-left:18px;margin:0 0 14px">
+            <li>Show the whole grid with all four outer borders.</li>
+            <li>Keep it sharp and well lit; avoid strong shadows.</li>
+            <li>A slight angle is fine; the grid is straightened automatically.</li>
+          </ul>
+          <button class="btn primary" style="width:100%" onclick="$('#newBtn').click()">Try another image</button>
+        </div>
+        <div class="panel-actions" id="outActions" hidden>
+          <button class="btn primary" id="dlBtn">&#11015; Download</button>
+          <button class="btn ghost" id="shareBtn" hidden>&#8599; Share</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>Runs on your own server &middot; Spring Boot + OpenCV &middot; digits read by a neural network written in plain Java</footer>
+</div>
+<div id="dropall">Drop to solve</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const state = { upload: null, previewUrl: null, puzzle: null, solution: null, after: null, busy: false };
+const cmp = $('#cmp');
+
+/* ---------- theme ---------- */
+function setTheme(t, save) {
+  document.documentElement.dataset.theme = t;
+  $('#themeBtn').innerHTML = t === 'dark' ? '&#9728;' : '&#9790;';
+  document.querySelector('meta[name=theme-color]').content = t === 'dark' ? '#0c0f1f' : '#6c5ce7';
+  if (save) { try { localStorage.setItem('sv-theme', t); } catch (e) {} }   // only remember an explicit choice
+}
+(function () {
+  let t = null; try { t = localStorage.getItem('sv-theme'); } catch (e) {}
+  setTheme(t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+})();
+$('#themeBtn').onclick = () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark', true);
+
+/* ---------- boards ---------- */
+function buildBoard(el, editable) {
+  el.innerHTML = '';
+  const cells = [];
+  for (let i = 0; i < 81; i++) {
+    const r = Math.floor(i / 9), c = i % 9, d = document.createElement('div');
+    d.className = 'cell' + (c % 3 === 2 && c < 8 ? ' br' : '') + (r % 3 === 2 && r < 8 ? ' bb' : '');
+    if (editable) {
+      const inp = document.createElement('input');
+      inp.maxLength = 1; inp.inputMode = 'numeric'; inp.autocomplete = 'off';
+      inp.addEventListener('input', () => { inp.value = inp.value.replace(/[^1-9]/g, ''); d.classList.remove('low', 'vlow'); d.classList.add('edited'); });
+      inp.addEventListener('focus', () => inp.select());
+      d.appendChild(inp);
+    }
+    el.appendChild(d); cells.push(d);
+  }
+  return cells;
+}
+const solCells = buildBoard($('#solBoard'), false);
+const editCells = buildBoard($('#editBoard'), true);
+
+function renderSolution() {
+  const { puzzle, solution } = state;
+  let k = 0;
+  solCells.forEach((d, i) => {
+    const r = Math.floor(i / 9), c = i % 9;
+    d.className = d.className.replace(/\b(fill)\b/g, '').trim();
+    d.innerHTML = '';
+    if (!puzzle || !solution) return;
+    const span = document.createElement('span');
+    span.textContent = solution[r][c];
+    d.appendChild(span);
+    if (puzzle[r][c] === 0) { d.classList.add('fill'); d.style.setProperty('--d', (k++ * 22) + 'ms'); }
+  });
+  if (!puzzle || !solution) solCells.forEach(d => d.innerHTML = '');
+}
+function fillEditor(puzzle, conf) {
+  editCells.forEach((d, i) => {
+    const r = Math.floor(i / 9), c = i % 9, v = puzzle[r][c], p = conf ? conf[r][c] : 1;
+    d.firstChild.value = v || '';
+    d.classList.remove('low', 'vlow', 'edited');
+    if (v && p < 0.6) d.classList.add('vlow'); else if (v && p < 0.9) d.classList.add('low');
+  });
+}
+const readEditor = () => Array.from({ length: 9 }, (_, r) => Array.from({ length: 9 }, (_, c) => Number(editCells[r * 9 + c].firstChild.value) || 0));
+
+/* ---------- tabs / banner / status ---------- */
+function showTab(name) {
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  $('#tab-sol').hidden = name !== 'sol'; $('#tab-chk').hidden = name !== 'chk';
+}
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+function banner(kind, text) { const b = $('#banner'); b.className = text ? 'show ' + kind : ''; b.textContent = text || ''; }
+function status(kind, text) { $('#dot').className = 'dot ' + kind; $('#statusText').textContent = text; }
+
+/* ---------- before / after slider ---------- */
+let sweepTimer = null;
+function setPos(p) { cmp.style.setProperty('--pos', Math.max(0, Math.min(100, p)) + '%'); }
+function sweep() {   // reveal animation: 100% -> 50%
+  const t0 = performance.now(), dur = 900;
+  cancelAnimationFrame(sweepTimer);
+  (function step(t) {
+    const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+    setPos(100 - 50 * e);
+    if (k < 1) sweepTimer = requestAnimationFrame(step);
+  })(t0);
+}
+let dragging = false;
+function moveTo(ev) { const r = cmp.getBoundingClientRect(); setPos((ev.clientX - r.left) / r.width * 100); }
+cmp.addEventListener('pointerdown', ev => { if (!cmp.classList.contains('solved')) return; dragging = true; cmp.setPointerCapture(ev.pointerId); cancelAnimationFrame(sweepTimer); moveTo(ev); });
+cmp.addEventListener('pointermove', ev => { if (dragging) moveTo(ev); });
+cmp.addEventListener('pointerup', () => dragging = false);
+cmp.addEventListener('pointercancel', () => dragging = false);
+
+/* ---------- picking an image ---------- */
+const hasTouch = matchMedia('(pointer: coarse)').matches;
+$('#camBtn').hidden = !hasTouch;
+$('#pickBtn').onclick = () => $('#fileInput').click();
+$('#camBtn').onclick = () => $('#camInput').click();
+$('#drop').onclick = ev => { if (ev.target.closest('button')) return; $('#fileInput').click(); };
+['#fileInput', '#camInput'].forEach(s => $(s).onchange = ev => { if (ev.target.files[0]) handleFile(ev.target.files[0]); ev.target.value = ''; });
+
+let dragDepth = 0;
+addEventListener('dragenter', ev => { ev.preventDefault(); dragDepth++; $('#dropall').classList.add('show'); $('#drop').classList.add('over'); });
+addEventListener('dragover', ev => ev.preventDefault());
+addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; $('#dropall').classList.remove('show'); $('#drop').classList.remove('over'); } });
+addEventListener('drop', ev => {
+  ev.preventDefault(); dragDepth = 0; $('#dropall').classList.remove('show'); $('#drop').classList.remove('over');
+  const f = [...ev.dataTransfer.files].find(f => f.type.startsWith('image/')); if (f) handleFile(f);
+});
+addEventListener('paste', ev => {
+  const it = [...(ev.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
+  if (it) handleFile(it.getAsFile());
+});
+
+/* Phone photos are huge: shrink them before upload (keeps the 10 MB server limit away). */
+async function prepare(file) {
+  const url = URL.createObjectURL(file);
+  const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new Error('unsupported')); i.src = url; });
+  const big = Math.max(img.naturalWidth, img.naturalHeight);
+  if (file.size < 3e6 && big <= 2400) { URL.revokeObjectURL(url); return file; }
+  const k = Math.min(1, 2000 / big), cv = document.createElement('canvas');
+  cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
+  cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+  URL.revokeObjectURL(url);
+  const blob = await new Promise(ok => cv.toBlob(ok, 'image/jpeg', 0.92));
+  return new File([blob], 'sudoku.jpg', { type: 'image/jpeg' });
+}
+
+async function handleFile(file) {
+  if (state.busy) return;
+  let up;
+  try { up = await prepare(file); }
+  catch (e) { alert('Could not open that file. Please use a PNG or JPG image.'); return; }
+  state.upload = up; state.puzzle = state.solution = state.after = null;
+  if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+  state.previewUrl = URL.createObjectURL(up);
+  $('#imgBefore').src = state.previewUrl;
+  $('#imgAfter').removeAttribute('src');
+  cmp.classList.remove('solved'); setPos(100);
+  $('#hero').style.display = 'none'; $('#work').classList.add('show');
+  $('#outActions').hidden = true; $('#chips').innerHTML = ''; banner('', '');
+  renderSolution(); showTab('sol'); scrollTo({ top: 0, behavior: 'smooth' });
+  solve(false);
+}
+
+/* ---------- talking to the server ---------- */
+async function solve(withCorrections) {
+  if (state.busy || !state.upload) return;
+  state.busy = true; cmp.classList.add('loading'); cmp.classList.remove('solved');
+  status('busy', withCorrections ? 'Solving with your corrections...' : 'Reading the grid...');
+  $('#resolveBtn').disabled = true; banner('', ''); $('#tabsArea').hidden = false; $('#tips').hidden = true;
+  const t0 = performance.now();
+  const fd = new FormData();
+  fd.append('file', state.upload, state.upload.name || 'sudoku.png');
+  if (withCorrections) fd.append('board', JSON.stringify(readEditor()));
+
+  let data;
+  try {
+    const res = await fetch('/api/solve-image', { method: 'POST', body: fd });
+    const txt = await res.text();
+    try { data = JSON.parse(txt); } catch (e) { data = { solved: false, message: res.status === 413 ? 'That image is too large (limit 10 MB).' : 'Server error (' + res.status + ').' }; }
+  } catch (e) {
+    data = { solved: false, message: 'Could not reach the server. Is the app still running?' };
+  }
+  const secs = ((performance.now() - t0) / 1000).toFixed(1);
+  state.busy = false; cmp.classList.remove('loading'); $('#resolveBtn').disabled = false;
+
+  if (data.puzzle) { state.puzzle = data.puzzle; fillEditor(data.puzzle, withCorrections ? null : data.confidence); }
+  if (data.solved) {
+    state.solution = data.solution; state.after = data.image;
+    $('#imgAfter').src = data.image;
+    cmp.classList.add('solved'); sweep();
+    renderSolution(); showTab('sol');
+    const clues = data.puzzle.flat().filter(v => v).length;
+    const confs = data.confidence.flat().filter((c, i) => data.puzzle.flat()[i]);
+    const avg = confs.length ? Math.round(100 * confs.reduce((a, b) => a + b, 0) / confs.length) : 100;
+    $('#chips').innerHTML = `<span class="chip"><b>${clues}</b> clues read</span><span class="chip"><b>${81 - clues}</b> cells solved</span>` +
+      (withCorrections ? '' : `<span class="chip"><b>${avg}%</b> confidence</span>`) + `<span class="chip"><b>${secs}s</b></span>`;
+    banner('ok', 'Solved! Drag the slider on the picture to compare. Not right? Check the digits tab.');
+    status('ok', 'Solved in ' + secs + 's'); $('#outActions').hidden = false;
+  } else {
+    state.solution = null; renderSolution();
+    banner('err', data.message || 'Something went wrong.');
+    status('err', 'Needs attention'); $('#outActions').hidden = true; $('#chips').innerHTML = '';
+    if (data.puzzle) showTab('chk'); else { $('#tabsArea').hidden = true; $('#tips').hidden = false; }
+  }
+}
+$('#resolveBtn').onclick = () => solve(true);
+$('#replayBtn').onclick = renderSolution;
+
+/* ---------- output actions ---------- */
+function dataUrlToFile(url, name) {
+  const [head, b64] = url.split(','), mime = head.match(/:(.*?);/)[1], bin = atob(b64), arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new File([arr], name, { type: mime });
+}
+$('#dlBtn').onclick = () => { const a = document.createElement('a'); a.href = state.after; a.download = 'sudoku-solved.png'; a.click(); };
+if (navigator.canShare) {
+  $('#shareBtn').hidden = false;
+  $('#shareBtn').onclick = async () => {
+    const f = dataUrlToFile(state.after, 'sudoku-solved.png');
+    try { if (navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: 'Solved Sudoku' }); } catch (e) {}
+  };
+}
+$('#newBtn').onclick = () => {
+  if (state.busy) return;
+  $('#work').classList.remove('show'); $('#hero').style.display = ''; state.upload = null; scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+/* ---------- install as an app (PWA) ---------- */
+let deferred = null;
+addEventListener('beforeinstallprompt', ev => { ev.preventDefault(); deferred = ev; $('#installBtn').hidden = false; });
+$('#installBtn').onclick = async () => { if (!deferred) return; deferred.prompt(); await deferred.userChoice; deferred = null; $('#installBtn').hidden = true; };
+if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+</script>
+</body>
+</html>
